@@ -1,39 +1,63 @@
 import socket
 import time
+import json
+import hashlib
 
+SERVER_IP = "127.0.0.1"
+SERVER_PORT = 8080
 bufferSize = 1024
+key = 123
 
-#socket creation
-UDPClientSocket=socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM) 
+def get_time():
+    return int(time.time() * 1000)
 
-serverAddressPort   = ("127.0.0.1", 20001)
+def encrypt(data):
+    return ''.join(chr(ord(c) ^ key) for c in data)
 
-#sending T1
-T1 = time.time()  #gets current time of system clock
-msg = str(T1)
-bytesToSend = str.encode(msg)
+def decrypt(data):
+    return ''.join(chr(ord(c) ^ key) for c in data)
 
-UDPClientSocket.sendto(bytesToSend, serverAddressPort)
+# ✅ MAIN FUNCTION (used by UI & multi-client)
+def run_single_client():
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-#Receiving T2 and T3
-msgFromServer = UDPClientSocket.recvfrom(bufferSize)
-msg1 = (msgFromServer[0]).decode()
-T2 = float(msg1)
+    T1 = get_time()
 
-msgFromServer1 = UDPClientSocket.recvfrom(bufferSize)
-msg2 = (msgFromServer1[0]).decode()
-T3 = float(msg2)
+    request_packet = {
+        "type": "REQUEST",
+        "timestamp": T1
+    }
 
-T4 = time.time()
+    request_json = json.dumps(request_packet)
 
-delay = (T4 - T1) - (T3 - T2)
-offset = ((T2 - T1) + (T3 - T4)) / 2
+    hash_val = hashlib.sha256(request_json.encode()).hexdigest()
+    final_msg = encrypt(request_json + "|" + hash_val)
 
-print("T1:",T1)
-print("T2:",T2)
-print("T3:",T3)
-print("T4:",T4)
-print("Delay: ",delay)
-print("Offset: ",offset)
+    client_socket.sendto(final_msg.encode(), (SERVER_IP, SERVER_PORT))
 
-UDPClientSocket.close()
+    data, addr = client_socket.recvfrom(bufferSize)
+
+    T4 = get_time()
+
+    decrypted = decrypt(data.decode())
+
+    if "|" not in decrypted:
+        return None
+
+    data_part, recv_hash = decrypted.split("|", 1)
+
+    calc_hash = hashlib.sha256(data_part.encode()).hexdigest()
+    if calc_hash != recv_hash:
+        return None
+
+    reply = json.loads(data_part)
+
+    T2 = reply["T2"]
+    T3 = reply["T3"]
+
+    delay = (T4 - T1) - (T3 - T2)
+    offset = ((T2 - T1) + (T3 - T4)) / 2
+
+    client_socket.close()
+
+    return delay, offset, T1, T2, T3, T4
