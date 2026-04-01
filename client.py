@@ -20,6 +20,14 @@ def decrypt(data):
 # ✅ MAIN FUNCTION (used by UI & multi-client)
 def run_single_client():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    client_socket.settimeout(5) 
+
+    try:
+        data, addr = client_socket.recvfrom(bufferSize)
+    except socket.timeout:
+        print("Request timed out")
+        client_socket.close()
+        return None
 
     T1 = get_time()
 
