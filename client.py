@@ -20,14 +20,7 @@ def decrypt(data):
 # ✅ MAIN FUNCTION (used by UI & multi-client)
 def run_single_client():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    client_socket.settimeout(5) 
-
-    try:
-        data, addr = client_socket.recvfrom(bufferSize)
-    except socket.timeout:
-        print("Request timed out")
-        client_socket.close()
-        return None
+    client_socket.settimeout(5)
 
     T1 = get_time()
 
@@ -37,13 +30,19 @@ def run_single_client():
     }
 
     request_json = json.dumps(request_packet)
-
     hash_val = hashlib.sha256(request_json.encode()).hexdigest()
     final_msg = encrypt(request_json + "|" + hash_val)
 
+    # ✅ SEND
     client_socket.sendto(final_msg.encode(), (SERVER_IP, SERVER_PORT))
 
-    data, addr = client_socket.recvfrom(bufferSize)
+    # ✅ RECEIVE (ONLY ONCE)
+    try:
+        data, addr = client_socket.recvfrom(bufferSize)
+    except socket.timeout:
+        print("Request timed out")
+        client_socket.close()
+        return None
 
     T4 = get_time()
 
